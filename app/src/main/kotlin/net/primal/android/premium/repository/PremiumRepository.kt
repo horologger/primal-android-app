@@ -134,6 +134,7 @@ class PremiumRepository @Inject constructor(
             cohort2 = this.cohort2,
             recurring = this.recurring,
             origin = this.origin,
+            donatedBtc = this.donatedBtc,
         )
     }
 }
