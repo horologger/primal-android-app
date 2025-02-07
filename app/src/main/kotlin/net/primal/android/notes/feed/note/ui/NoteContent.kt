@@ -178,7 +178,7 @@ fun NoteContent(
                 contentText.count { it == '\n' } < MAX_LINE_BREAKS_IN_TWEET
 
             PrimalClickableText(
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(vertical = 4.dp),
                 style = AppTheme.typography.bodyMedium.copy(
                     color = contentColor,
                     fontSize = if (!tweetMode) {
