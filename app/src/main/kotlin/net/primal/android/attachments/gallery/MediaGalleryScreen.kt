@@ -81,11 +81,12 @@ import net.primal.android.core.compose.icons.primaliconpack.ArrowBack
 import net.primal.android.core.compose.icons.primaliconpack.More
 import net.primal.android.core.compose.runtime.DisposableLifecycleObserverEffect
 import net.primal.android.theme.AppTheme
+import timber.log.Timber
 
 @Composable
 fun MediaGalleryScreen(viewModel: MediaGalleryViewModel, onClose: () -> Unit) {
     val uiState = viewModel.state.collectAsState()
-
+//    Timber.i("Rendered image")
     val uiScope = rememberCoroutineScope()
     val context = LocalContext.current
     LaunchedEffect(viewModel) {

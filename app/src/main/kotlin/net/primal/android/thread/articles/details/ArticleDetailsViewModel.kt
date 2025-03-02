@@ -1,10 +1,13 @@
 package net.primal.android.thread.articles.details
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.*
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,13 +17,18 @@ import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import net.primal.android.articles.ArticleRepository
+import net.primal.android.attachments.repository.AttachmentsRepository
 import net.primal.android.core.errors.UiError
 import net.primal.android.core.utils.authorNameUiFriendly
 import net.primal.android.crypto.hexToNpubHrp
+import net.primal.android.editor.domain.NoteAttachment
 import net.primal.android.highlights.model.JoinedHighlightsUi
 import net.primal.android.highlights.model.joinOnContent
 import net.primal.android.highlights.repository.HighlightRepository
 import net.primal.android.navigation.naddrOrThrow
+import net.primal.android.networking.primal.upload.PrimalFileUploader
+import net.primal.android.networking.primal.upload.UnsuccessfulFileUpload
+import net.primal.android.networking.primal.upload.domain.UploadJob
 import net.primal.android.networking.relays.errors.MissingRelaysException
 import net.primal.android.networking.relays.errors.NostrPublishException
 import net.primal.android.networking.sockets.errors.WssException
@@ -46,6 +54,7 @@ import net.primal.android.thread.articles.details.ArticleDetailsContract.SideEff
 import net.primal.android.thread.articles.details.ArticleDetailsContract.UiEvent
 import net.primal.android.thread.articles.details.ArticleDetailsContract.UiState
 import net.primal.android.thread.articles.details.ui.mapAsArticleDetailsUi
+import net.primal.android.thread.articles.details.ui.rendering.isValidHttpOrHttpsUrl
 import net.primal.android.user.accounts.active.ActiveAccountStore
 import net.primal.android.user.accounts.active.ActiveUserAccountState
 import net.primal.android.wallet.domain.ZapTarget
@@ -65,6 +74,7 @@ class ArticleDetailsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val eventRepository: EventRepository,
     private val zapHandler: ZapHandler,
+    private val attachmentRepository: AttachmentsRepository,
 ) : ViewModel() {
 
     private val naddr = Nip19TLV.parseUriAsNaddrOrNull(savedStateHandle.naddrOrThrow)
@@ -79,6 +89,8 @@ class ArticleDetailsViewModel @Inject constructor(
     private val _effect: Channel<SideEffect> = Channel()
     val effect = _effect.receiveAsFlow()
     private fun setEffect(effect: SideEffect) = viewModelScope.launch { _effect.send(effect) }
+
+    private val attachmentUploads = mutableMapOf<UUID, UploadJob>()
 
     init {
         observeEvents()
@@ -160,6 +172,10 @@ class ArticleDetailsViewModel @Inject constructor(
                                 referencedNotes = referencedNotes.map { it.asFeedPostUi() },
                             )
                         }
+
+                        importPhotos(article.data.uris.filter { !it.isNostrNote() && !it.isValidHttpOrHttpsUrl() }
+                            .mapNotNull { Uri.parse(it) })
+
                     }
 
                     val nostrProfileUris = article.data.uris.filter { it.isNPubUri() || it.isNPub() }.toSet()
@@ -454,5 +470,68 @@ class ArticleDetailsViewModel @Inject constructor(
 
     private fun dismissErrors() {
         setState { copy(error = null) }
+    }
+
+    private fun importPhotos(uris: List<Uri>) {
+        val newAttachments = uris.map { NoteAttachment(localUri = it) }
+//        setState { copy(attachments = attachments + newAttachments) }
+
+        viewModelScope.launch {
+            newAttachments
+                .map {
+                    val uploadId = PrimalFileUploader.generateRandomUploadId()
+                    val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+                        uploadAttachment(attachment = it, uploadId = uploadId)
+                    }
+                    val uploadJob = UploadJob(job = job, id = uploadId)
+                    attachmentUploads[it.id] = uploadJob
+                    uploadJob
+                }.forEach {
+                    it.job.start()
+                    it.job.join()
+                }
+//            checkUploadQueueAndDisableFlagIfCompleted()
+        }
+    }
+
+    private suspend fun uploadAttachment(attachment: NoteAttachment, uploadId: String) {
+        var updatedAttachment = attachment
+        try {
+//            setState { copy(uploadingAttachments = true) }
+            updatedAttachment = updatedAttachment.copy(uploadError = null)
+//            updateNoteAttachmentState(attachment = updatedAttachment)
+
+            val uploadResult = attachmentRepository.uploadNoteAttachment(
+                userId = activeAccountStore.activeUserId(),
+                attachment = attachment,
+                uploadId = uploadId,
+                onProgress = { uploadedBytes, totalBytes ->
+                    updatedAttachment = updatedAttachment.copy(
+                        originalUploadedInBytes = uploadedBytes,
+                        originalSizeInBytes = totalBytes,
+                    )
+//                    updateNoteAttachmentState(attachment = updatedAttachment)
+                },
+            )
+
+            updatedAttachment = updatedAttachment.copy(
+                remoteUrl = uploadResult.remoteUrl,
+                originalHash = uploadResult.originalHash,
+                originalSizeInBytes = uploadResult.originalFileSize,
+            )
+//            updateNoteAttachmentState(attachment = updatedAttachment)
+
+//            val (mimeType, dimensions) = fileAnalyser.extractImageTypeAndDimensions(attachment.localUri)
+//            if (mimeType != null || dimensions != null) {
+//                updatedAttachment = updatedAttachment.copy(
+//                    mimeType = mimeType,
+//                    dimensionInPixels = dimensions,
+//                )
+//                updateNoteAttachmentState(updatedAttachment)
+//            }
+        } catch (error: UnsuccessfulFileUpload) {
+            Timber.w(error)
+//            updateNoteAttachmentState(attachment = updatedAttachment.copy(uploadError = error))
+        }
     }
 }

@@ -57,6 +57,7 @@ import java.text.NumberFormat
 import kotlinx.coroutines.launch
 import net.primal.android.R
 import net.primal.android.articles.feed.ui.ArticleDropdownMenuIcon
+import net.primal.android.attachments.domain.NoteAttachmentType
 import net.primal.android.core.compose.AppBarIcon
 import net.primal.android.core.compose.IconText
 import net.primal.android.core.compose.PrimalDivider
@@ -91,6 +92,7 @@ import net.primal.android.notes.feed.note.FeedNoteCard
 import net.primal.android.notes.feed.note.ui.FeedNoteActionsRow
 import net.primal.android.notes.feed.note.ui.ReferencedNoteCard
 import net.primal.android.notes.feed.note.ui.ThreadNoteStatsRow
+import net.primal.android.notes.feed.note.ui.events.MediaClickEvent
 import net.primal.android.notes.feed.note.ui.events.NoteCallbacks
 import net.primal.android.notes.feed.zaps.UnableToZapBottomSheet
 import net.primal.android.notes.feed.zaps.ZapBottomSheet
@@ -183,7 +185,7 @@ private fun ArticleDetailsScreen(
 
     val listState = rememberLazyListState()
     val scrolledToTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
-
+//    Timber.i("Useful info: ${detailsState.article?.eventId}")
     val articleParts by remember(detailsState.article?.content) {
         mutableStateOf(
             (detailsState.article?.content ?: "")
@@ -621,7 +623,21 @@ private fun ArticleContentWithComments(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .clip(AppTheme.shapes.medium),
+                            .clip(AppTheme.shapes.medium)
+                            .clickable {
+                                state.article?.eventId?.let {
+                                    MediaClickEvent(
+                                        noteId = it,
+                                        noteAttachmentType = NoteAttachmentType.Image,
+                                        mediaUrl = part.imageUrl,
+                                        positionMs = 2,
+                                    )
+                                }?.let {
+                                    noteCallbacks.onMediaClick?.invoke(
+                                        it
+                                    )
+                                }
+                            },
                         model = part.imageUrl,
                         contentScale = ContentScale.FillWidth,
                         contentDescription = null,
@@ -814,4 +830,4 @@ private fun List<String>.buildArticleRenderParts(referencedNotes: List<FeedPostU
     }
 }
 
-private fun String.isNostrNote() = isNote() || isNostrUri() || isNEvent() || isNEventUri()
+public fun String.isNostrNote() = isNote() || isNostrUri() || isNEvent() || isNEventUri()

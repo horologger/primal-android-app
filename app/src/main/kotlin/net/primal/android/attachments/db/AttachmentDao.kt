@@ -19,4 +19,10 @@ interface AttachmentDao {
         noteId: String,
         types: List<NoteAttachmentType> = NoteAttachmentType.entries,
     ): List<NoteAttachment>
+
+    @Query("SELECT * FROM NoteAttachment WHERE eventId = :articleId AND type IN (:types) ORDER BY position")
+    fun loadArticleAttachments(
+        articleId: String,
+        types: List<NoteAttachmentType> = NoteAttachmentType.entries,
+    ): List<NoteAttachment>
 }

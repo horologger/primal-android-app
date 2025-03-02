@@ -16,8 +16,12 @@ class AttachmentsRepository @Inject constructor(
     private val dispatchers: CoroutineDispatcherProvider,
 ) {
 
-    fun loadAttachments(noteId: String, types: List<NoteAttachmentType>): List<NoteAttachment> {
+    fun loadNoteAttachments(noteId: String, types: List<NoteAttachmentType>): List<NoteAttachment> {
         return database.attachments().loadNoteAttachments(noteId = noteId, types = types)
+    }
+
+    fun loadArticleAttachments(articleId: String, types: List<NoteAttachmentType>): List<NoteAttachment> {
+        return database.attachments().loadArticleAttachments(articleId = articleId, types = types)
     }
 
     @Throws(UnsuccessfulFileUpload::class)
