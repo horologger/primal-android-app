@@ -2,7 +2,7 @@ package net.primal.android.articles.api.mediator
 
 import androidx.room.withTransaction
 import net.primal.android.articles.api.model.ArticleResponse
-import net.primal.android.attachments.ext.flatMapPostsAsNoteAttachmentPO
+import net.primal.android.attachments.ext.flatMapArticlesAsNoteAttachmentPO
 import net.primal.android.core.ext.asMapByKey
 import net.primal.android.db.PrimalDatabase
 import net.primal.android.nostr.db.eventRelayHintsUpserter
@@ -23,9 +23,7 @@ import net.primal.android.nostr.ext.mapReferencedEventsAsHighlightDataPO
 import net.primal.android.nostr.ext.parseAndMapPrimalLegendProfiles
 import net.primal.android.nostr.ext.parseAndMapPrimalPremiumInfo
 import net.primal.android.nostr.ext.parseAndMapPrimalUserNames
-import net.primal.android.notes.repository.persistToDatabaseAsTransaction
 import net.primal.android.thread.db.ArticleCommentCrossRef
-import timber.log.Timber
 
 suspend fun ArticleResponse.persistToDatabaseAsTransaction(userId: String, database: PrimalDatabase) {
     val cdnResources = this.cdnResources.flatMapNotNullAsCdnResource().asMapByKey { it.url }
@@ -70,20 +68,12 @@ suspend fun ArticleResponse.persistToDatabaseAsTransaction(userId: String, datab
 
     val linkPreviews = primalLinkPreviews.flatMapNotNullAsLinkPreviewResource().asMapByKey { it.url }
     val videoThumbnails = this.cdnResources.flatMapNotNullAsVideoThumbnailsMap()
-    val profileIdToProfileDataMap = profiles.asMapByKey { it.ownerId }
 
-    val allPosts = (referencedPostsWithReplyTo + allNotes).map { postData ->
-        val eventIdMap = profileIdToProfileDataMap.mapValues { it.value.eventId }
-        postData.copy(authorMetadataId = eventIdMap[postData.authorId])
-    }
-
-    val noteAttachments = allPosts.flatMapPostsAsNoteAttachmentPO(
+    val noteAttachments = allArticles.flatMapArticlesAsNoteAttachmentPO(
         cdnResources = cdnResources,
         linkPreviews = linkPreviews,
         videoThumbnails = videoThumbnails,
     )
-
-    Timber.i("Super crazy noteAttachments: $noteAttachments")
 
     database.withTransaction {
         database.profiles().insertOrUpdateAll(data = profiles)
