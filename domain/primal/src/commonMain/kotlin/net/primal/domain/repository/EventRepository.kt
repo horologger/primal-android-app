@@ -17,4 +17,17 @@ interface EventRepository {
         eventId: String,
         limit: Int,
     )
+    suspend fun findEventStats(eventId: String)
+    suspend fun upsertEventStats(stats: NostrEventStats)
+
+    suspend fun findUserStats(eventId: String, userId: String)
+    suspend fun upsertUserStats(stats: NostrEventUserStats)
+
+    suspend fun insertZap(zap: EventZap)
+    suspend fun deleteZap(
+        noteId: String,
+        senderId: String,
+        receiverId: String,
+        timestamp: Long,
+    )
 }

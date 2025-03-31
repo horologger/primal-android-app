@@ -1,82 +1,78 @@
 package net.primal.android.events.repository
 
-import androidx.room.withTransaction
 import kotlin.time.Duration.Companion.milliseconds
-import net.primal.android.db.PrimalDatabase
 import net.primal.android.events.db.EventStats
 import net.primal.android.events.db.EventUserStats
 import net.primal.android.events.db.EventZap
+import net.primal.android.profile.repository.ProfileRepository
 import net.primal.android.wallet.utils.CurrencyConversionUtils.toBtc
 
 class EventStatsUpdater(
     val eventId: String,
     val userId: String,
     val eventAuthorId: String,
-    val database: PrimalDatabase,
+    val profileRepository: ProfileRepository,
+    val eventRepository: EventRepository,
 ) {
 
     private val timestamp: Long = System.currentTimeMillis().milliseconds.inWholeSeconds
 
-    private val eventStats: EventStats by lazy {
-        database.eventStats().find(eventId = eventId)
-            ?: EventStats(eventId = eventId)
+    private suspend fun eventStats(): EventStats =
+        eventRepository.findEventStats(eventId) ?: EventStats(eventId = eventId)
+
+    private suspend fun eventUserStats(): EventUserStats =
+        eventRepository.findUserStats(eventId, userId) ?: EventUserStats(eventId = eventId, userId = userId)
+
+    suspend fun increaseLikeStats() {
+        val stats = eventStats()
+        val userStats = eventUserStats()
+        eventRepository.upsertEventStats(stats.copy(likes = stats.likes + 1))
+        eventRepository.upsertUserStats(userStats.copy(liked = true))
     }
 
-    private val eventUserStats: EventUserStats by lazy {
-        database.eventUserStats().find(eventId = eventId, userId = userId)
-            ?: EventUserStats(eventId = eventId, userId = userId)
+    suspend fun increaseRepostStats() {
+        val stats = eventStats()
+        val userStats = eventUserStats()
+        eventRepository.upsertEventStats(stats.copy(reposts = stats.reposts + 1))
+        eventRepository.upsertUserStats(userStats.copy(reposted = true))
     }
 
-    suspend fun increaseLikeStats() =
-        database.withTransaction {
-            database.eventStats().upsert(data = eventStats.copy(likes = eventStats.likes + 1))
-            database.eventUserStats().upsert(data = eventUserStats.copy(liked = true))
-        }
+    suspend fun increaseZapStats(amountInSats: Int, zapComment: String) {
+        val stats = eventStats()
+        val userStats = eventUserStats()
+        val zapSender = profileRepository.findProfileDataOrNull(profileId = userId)
 
-    suspend fun increaseRepostStats() =
-        database.withTransaction {
-            database.eventStats().upsert(data = eventStats.copy(reposts = eventStats.reposts + 1))
-            database.eventUserStats().upsert(data = eventUserStats.copy(reposted = true))
-        }
+        eventRepository.upsertEventStats(
+            stats.copy(
+                zaps = stats.zaps + 1,
+                satsZapped = stats.satsZapped + amountInSats,
+            ),
+        )
+        eventRepository.upsertUserStats(userStats.copy(zapped = true))
 
-    suspend fun increaseZapStats(amountInSats: Int, zapComment: String) =
-        database.withTransaction {
-            val zapSender = database.profiles().findProfileData(profileId = userId)
-            database.eventStats().upsert(
-                data = eventStats.copy(
-                    zaps = eventStats.zaps + 1,
-                    satsZapped = eventStats.satsZapped + amountInSats,
-                ),
-            )
-            database.eventUserStats().upsert(data = eventUserStats.copy(zapped = true))
+        eventRepository.insertZap(
+            EventZap(
+                zapSenderId = userId,
+                zapReceiverId = eventAuthorId,
+                eventId = eventId,
+                zapRequestAt = timestamp,
+                zapReceiptAt = timestamp,
+                zapSenderAvatarCdnImage = zapSender?.avatarCdnImage,
+                zapSenderHandle = zapSender?.handle,
+                zapSenderDisplayName = zapSender?.displayName,
+                zapSenderInternetIdentifier = zapSender?.internetIdentifier,
+                zapSenderPrimalLegendProfile = zapSender?.primalPremiumInfo?.legendProfile,
+                amountInBtc = amountInSats.toBtc(),
+                message = zapComment,
+            ),
+        )
+    }
 
-            database.eventZaps().insert(
-                data = EventZap(
-                    zapSenderId = userId,
-                    zapReceiverId = eventAuthorId,
-                    eventId = eventId,
-                    zapRequestAt = timestamp,
-                    zapReceiptAt = timestamp,
-                    zapSenderAvatarCdnImage = zapSender?.avatarCdnImage,
-                    zapSenderHandle = zapSender?.handle,
-                    zapSenderDisplayName = zapSender?.displayName,
-                    zapSenderInternetIdentifier = zapSender?.internetIdentifier,
-                    zapSenderPrimalLegendProfile = zapSender?.primalPremiumInfo?.legendProfile,
-                    amountInBtc = amountInSats.toBtc(),
-                    message = zapComment,
-                ),
-            )
-        }
-
-    suspend fun revertStats() =
-        database.withTransaction {
-            database.eventStats().upsert(data = eventStats)
-            database.eventUserStats().upsert(data = eventUserStats)
-            database.eventZaps().delete(
-                noteId = eventId,
-                senderId = userId,
-                receiverId = eventAuthorId,
-                timestamp = timestamp,
-            )
-        }
+    suspend fun revertStats() {
+        val stats = eventStats()
+        val userStats = eventUserStats()
+        eventRepository.upsertEventStats(stats)
+        eventRepository.upsertUserStats(userStats)
+        eventRepository.deleteZap(eventId, userId, eventAuthorId, timestamp)
+    }
 }

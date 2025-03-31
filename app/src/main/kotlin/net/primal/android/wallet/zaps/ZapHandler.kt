@@ -3,10 +3,11 @@ package net.primal.android.wallet.zaps
 import javax.inject.Inject
 import kotlinx.coroutines.withContext
 import net.primal.android.core.coroutines.CoroutineDispatcherProvider
-import net.primal.android.db.PrimalDatabase
+import net.primal.android.events.repository.EventRepository
 import net.primal.android.events.repository.EventStatsUpdater
 import net.primal.android.networking.relays.FALLBACK_RELAYS
 import net.primal.android.nostr.notary.NostrNotary
+import net.primal.android.profile.repository.ProfileRepository
 import net.primal.android.user.accounts.UserAccountsStore
 import net.primal.android.user.domain.RelayKind
 import net.primal.android.user.domain.UserAccount
@@ -27,7 +28,8 @@ class ZapHandler @Inject constructor(
     private val primalWalletZapper: WalletNostrZapper,
     private val relayRepository: RelayRepository,
     private val notary: NostrNotary,
-    private val database: PrimalDatabase,
+    private val profileRepository: ProfileRepository,
+    private val eventRepository: EventRepository,
 ) {
 
     @Throws(ZapFailureException::class)
@@ -106,14 +108,16 @@ class ZapHandler @Inject constructor(
                 userId = userId,
                 eventId = this.eventId,
                 eventAuthorId = this.eventAuthorId,
-                database = database,
+                profileRepository = profileRepository,
+                eventRepository = eventRepository,
             )
 
             is ZapTarget.ReplaceableEvent -> EventStatsUpdater(
                 userId = userId,
                 eventId = this.eventId,
                 eventAuthorId = this.eventAuthorId,
-                database = database,
+                profileRepository = profileRepository,
+                eventRepository = eventRepository,
             )
 
             is ZapTarget.Profile -> null

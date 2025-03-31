@@ -13,6 +13,8 @@ import kotlinx.serialization.json.JsonArray
 import net.primal.android.core.coroutines.CoroutineDispatcherProvider
 import net.primal.android.core.ext.asMapByKey
 import net.primal.android.db.PrimalDatabase
+import net.primal.android.events.db.EventStats
+import net.primal.android.events.db.EventUserStats
 import net.primal.android.events.db.EventZap
 import net.primal.android.events.reactions.mediator.EventZapsMediator
 import net.primal.android.networking.relays.errors.NostrPublishException
@@ -26,6 +28,7 @@ import net.primal.android.nostr.ext.parseAndMapPrimalPremiumInfo
 import net.primal.android.nostr.ext.parseAndMapPrimalUserNames
 import net.primal.android.nostr.ext.takeContentAsPrimalUserScoresOrNull
 import net.primal.android.nostr.notary.exceptions.SignException
+import net.primal.android.profile.repository.ProfileRepository
 import net.primal.data.remote.api.events.EventStatsApi
 import net.primal.data.remote.api.events.model.EventActionsRequestBody
 import net.primal.data.remote.api.events.model.EventZapsRequestBody
@@ -40,6 +43,7 @@ class EventRepository @Inject constructor(
     private val primalPublisher: PrimalPublisher,
     private val eventStatsApi: EventStatsApi,
     private val database: PrimalDatabase,
+    private val profileRepository: ProfileRepository,
 ) {
 
     fun observeEventStats(eventIds: List<String>) = database.eventStats().observeStats(eventIds)
@@ -58,7 +62,8 @@ class EventRepository @Inject constructor(
             eventId = eventId,
             userId = userId,
             eventAuthorId = eventAuthorId,
-            database = database,
+            profileRepository = profileRepository,
+            eventRepository = this@EventRepository,
         )
 
         try {
@@ -95,7 +100,8 @@ class EventRepository @Inject constructor(
             eventId = eventId,
             userId = userId,
             eventAuthorId = eventAuthorId,
-            database = database,
+            profileRepository = profileRepository,
+            eventRepository = this@EventRepository,
         )
 
         try {
@@ -205,4 +211,38 @@ class EventRepository @Inject constructor(
         ),
         pagingSourceFactory = pagingSourceFactory,
     )
+
+    suspend fun findEventStats(eventId: String): EventStats? =
+        withContext(dispatcherProvider.io()) {
+            database.eventStats().find(eventId)
+        }
+
+    suspend fun upsertEventStats(stats: EventStats) =
+        withContext(dispatcherProvider.io()) {
+            database.eventStats().upsert(stats)
+        }
+
+    suspend fun findUserStats(eventId: String, userId: String): EventUserStats? =
+        withContext(dispatcherProvider.io()) {
+            database.eventUserStats().find(eventId, userId)
+        }
+
+    suspend fun upsertUserStats(stats: EventUserStats) =
+        withContext(dispatcherProvider.io()) {
+            database.eventUserStats().upsert(stats)
+        }
+
+    suspend fun insertZap(zap: EventZap) =
+        withContext(dispatcherProvider.io()) {
+            database.eventZaps().insert(zap)
+        }
+
+    suspend fun deleteZap(
+        noteId: String,
+        senderId: String,
+        receiverId: String,
+        timestamp: Long,
+    ) = withContext(dispatcherProvider.io()) {
+        database.eventZaps().delete(senderId, receiverId, noteId, timestamp)
+    }
 }
