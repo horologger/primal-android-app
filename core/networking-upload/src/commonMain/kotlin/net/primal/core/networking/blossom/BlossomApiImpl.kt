@@ -1,5 +1,6 @@
 package net.primal.core.networking.blossom
 
+import io.github.aakira.napier.Napier
 import io.ktor.client.call.body
 import io.ktor.client.request.head
 import io.ktor.client.request.headers
@@ -123,10 +124,14 @@ internal class BlossomApiImpl(
         bufferedSource: BufferedSource,
         errorPrefix: String,
         onProgress: ((Int, Int) -> Unit)? = null,
-        checkFileSize: Boolean = false,
+        checkFileSize: Boolean = false
     ): BlobDescriptor {
         var uploadedBytes = 0L
         val totalBytes = fileMetadata.sizeInBytes
+        val reportInterval = 256 * 1024L
+        var lastReportBytes = 0L
+
+        Napier.d { "Blossom ▶ PUT /$endpoint started — totalSize=$totalBytes" }
 
         val response = withContext(dispatcherProvider.io()) {
             bufferedSource.use { source ->
@@ -137,38 +142,44 @@ internal class BlossomApiImpl(
                         append(HttpHeaders.ContentType, contentType)
                     }
 
-                    setBody(
-                        object : OutgoingContent.WriteChannelContent() {
-                            override val contentType: ContentType
-                                get() = ContentType.parse(contentType)
+                    setBody(object : OutgoingContent.WriteChannelContent() {
+                        override val contentType: ContentType
+                            get() = ContentType.parse(contentType)
 
-                            override suspend fun writeTo(channel: ByteWriteChannel) {
-                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                                while (!source.exhausted()) {
-                                    val read = source.read(buffer)
-                                    if (read == -1) break
-                                    channel.writeFully(buffer, 0, read)
-                                    uploadedBytes += read
+                        override suspend fun writeTo(channel: ByteWriteChannel) {
+                            val buffer = ByteArray(4 * 1024)
+                            while (!source.exhausted()) {
+                                val read = source.read(buffer)
+                                if (read == -1) break
+                                channel.writeFully(buffer, 0, read)
+                                uploadedBytes += read
+
+                                if (uploadedBytes - lastReportBytes >= reportInterval) {
+                                    Napier.v { "Blossom ▶ uploaded $uploadedBytes / $totalBytes" }
                                     onProgress?.invoke(uploadedBytes.toInt(), totalBytes.toInt())
+                                    lastReportBytes = uploadedBytes
                                 }
-                                channel.flush()
                             }
-                        },
-                    )
+                            channel.flush()
+                        }
+                    })
                 }
             }
         }
 
         if (!response.status.isSuccess()) {
             val reason = response.headers["X-Reason"] ?: "Unknown"
-            throw BlossomUploadException(message = "$reason ($errorPrefix)")
+            Napier.e { "Blossom ▶ PUT /$endpoint failed: $reason" }
+            throw BlossomUploadException("$reason ($errorPrefix)")
         }
 
         val descriptor = response.body<BlobDescriptor>()
-        if (checkFileSize && fileMetadata.sizeInBytes != descriptor.sizeInBytes) {
-            throw BlossomUploadException(message = "Different file size on the server.")
+        if (checkFileSize && descriptor.sizeInBytes != totalBytes) {
+            Napier.e { "Blossom ▶ PUT /$endpoint size mismatch: expected $totalBytes, got ${descriptor.sizeInBytes}" }
+            throw BlossomUploadException("Different file size on the server.")
         }
 
+        Napier.d { "Blossom ▶ PUT /$endpoint upload complete: ${descriptor.url}" }
         return descriptor
     }
 }
