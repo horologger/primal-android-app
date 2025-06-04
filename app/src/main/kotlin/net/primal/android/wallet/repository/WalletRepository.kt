@@ -30,13 +30,17 @@ import net.primal.android.wallet.domain.Network
 import net.primal.android.wallet.domain.SubWallet
 import net.primal.android.wallet.domain.WalletKycLevel
 import net.primal.core.utils.coroutines.DispatcherProvider
+import net.primal.domain.nostr.zaps.ZapRequestException
 import net.primal.domain.profile.ProfileRepository
+import net.primal.wallet.WalletApiFactory
+import timber.log.Timber
 
 @OptIn(ExperimentalPagingApi::class)
 class WalletRepository @Inject constructor(
     private val dispatcherProvider: DispatcherProvider,
     private val accountsStore: UserAccountsStore,
     private val walletApi: WalletApi,
+    private val walletApiFactory: WalletApiFactory,
     private val usersDatabase: UsersDatabase,
     private val userRepository: UserRepository,
     private val profileRepository: ProfileRepository,
@@ -157,12 +161,18 @@ class WalletRepository @Inject constructor(
     }
 
     suspend fun fetchWalletBalance(userId: String) {
-        val response = withContext(dispatcherProvider.io()) { walletApi.getBalance(userId = userId) }
-        userRepository.updatePrimalWalletBalance(
-            userId = userId,
-            balanceInBtc = response.amount,
-            maxBalanceInBtc = response.maxAmount,
-        )
+        val walletResponse = walletApiFactory.createOrNull(userId = userId)
+            ?: throw ZapRequestException(message = "Unable to create wallet.")
+
+        val response = walletResponse.getBalance(userId)
+
+        Timber.tag("Response").i(response.toString())
+//        val response = withContext(dispatcherProvider.io()) { walletApi.getBalance(userId = userId) }
+//        userRepository.updatePrimalWalletBalance(
+//            userId = userId,
+//            balanceInBtc = response.amount,
+//            maxBalanceInBtc = response.maxAmount,
+//        )
     }
 
     suspend fun getExchangeRate(userId: String) =

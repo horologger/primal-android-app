@@ -36,6 +36,7 @@ kotlin {
             dependencies {
                 // Internal
                 implementation(project(":core:utils"))
+                api(project(":core:networking-nwc"))
                 api(project(":domain:nostr"))
 
                 // Kotlin
