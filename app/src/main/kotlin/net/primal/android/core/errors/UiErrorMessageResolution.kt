@@ -90,5 +90,6 @@ fun UiError.resolveUiErrorMessage(context: Context): String {
         is UiError.InvalidPromoCode -> context.getString(R.string.app_error_invalid_promo_code)
 
         is UiError.FailedToBookmarkNote -> context.getString(R.string.app_error_bookmark_note)
+        is UiError.FailedToUpdateFollowList -> "test"
     }
 }

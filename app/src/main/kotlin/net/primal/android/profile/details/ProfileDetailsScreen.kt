@@ -191,6 +191,7 @@ private fun ProfileDetailsScreen(
                 )
             },
             onFollowAllApproved = {},
+            onFollowsActionsApproved = {},
             onClose = { eventPublisher(ProfileDetailsContract.UiEvent.DismissConfirmFollowUnfollowAlertDialog) },
         )
     }

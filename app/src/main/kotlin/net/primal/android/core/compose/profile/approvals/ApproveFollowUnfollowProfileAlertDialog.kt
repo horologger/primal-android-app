@@ -8,6 +8,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import net.primal.android.R
 import net.primal.android.theme.AppTheme
+import net.primal.android.user.handler.ProfileFollowsHandler
 
 @Composable
 fun ApproveFollowUnfollowProfileAlertDialog(
@@ -15,6 +16,7 @@ fun ApproveFollowUnfollowProfileAlertDialog(
     onFollowApproved: (ProfileApproval.Follow) -> Unit,
     onUnfollowApproved: (ProfileApproval.Unfollow) -> Unit,
     onFollowAllApproved: (ProfileApproval.FollowAll) -> Unit,
+    onFollowsActionsApproved: (ProfileApproval.FollowsActions) -> Unit,
     onClose: () -> Unit,
 ) {
     val messages = when (profileApproval) {
@@ -48,6 +50,19 @@ fun ApproveFollowUnfollowProfileAlertDialog(
                 negative = stringResource(id = R.string.context_confirm_follow_all_negative),
             )
         }
+
+        is ProfileApproval.FollowsActions -> {
+            ApprovalMessages(
+                title = stringResource(id = R.string.context_confirm_follow_all_title),
+                text = pluralStringResource(
+                    id = R.plurals.context_confirm_follow_all_text,
+                    profileApproval.actions.size,
+                    profileApproval.actions.size,
+                ),
+                positive = stringResource(id = R.string.context_confirm_follow_all_positive),
+                negative = stringResource(id = R.string.context_confirm_follow_all_negative),
+            )
+        }
     }
     AlertDialog(
         containerColor = AppTheme.colorScheme.surfaceVariant,
@@ -76,6 +91,7 @@ fun ApproveFollowUnfollowProfileAlertDialog(
                         is ProfileApproval.Follow -> onFollowApproved(profileApproval)
                         is ProfileApproval.Unfollow -> onUnfollowApproved(profileApproval)
                         is ProfileApproval.FollowAll -> onFollowAllApproved(profileApproval)
+                        is ProfileApproval.FollowsActions -> onFollowsActionsApproved(profileApproval)
                     }
                 },
             ) {
@@ -95,6 +111,7 @@ private data class ApprovalMessages(
 )
 
 sealed class ProfileApproval {
+    data class FollowsActions(val actions: List<ProfileFollowsHandler.Action>) : ProfileApproval()
     data class Follow(val profileId: String) : ProfileApproval()
     data class Unfollow(val profileId: String) : ProfileApproval()
     data class FollowAll(val profileIds: List<String>) : ProfileApproval()

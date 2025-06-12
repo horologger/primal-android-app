@@ -108,6 +108,7 @@ private fun FollowPackScreen(
             onFollowApproved = { eventPublisher(UiEvent.FollowUser(userId = it.profileId, forceUpdate = true)) },
             onUnfollowApproved = { eventPublisher(UiEvent.UnfollowUser(userId = it.profileId, forceUpdate = true)) },
             onFollowAllApproved = { eventPublisher(UiEvent.FollowAll(userIds = it.profileIds, forceUpdate = true)) },
+            onFollowsActionsApproved = {},
             onClose = { eventPublisher(UiEvent.DismissConfirmFollowUnfollowAlertDialog) },
         )
     }
